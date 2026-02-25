@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quiz nach dem Video</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:12px;padding:12px;max-width:900px}
+  h1{font-size:1.25rem;margin-bottom:6px}
+  .card{border:1px solid #ddd;padding:12px;border-radius:8px;margin:10px 0;background:#fff}
+  .options label{display:block;margin:6px 0}
+  button{padding:10px 14px;font-size:1rem;margin-top:10px}
+  .result{margin-top:12px;padding:10px;border-radius:8px;background:#f6f6f6}
+  @media(min-width:600px){body{margin:20px auto}}
+</style>
+</head>
+<body>
+<h1>Kurzer Test</h1>
+
+<!-- Optional: anstelle des eingebauten Quizzes kannst du hier ein Google-Formular einbetten.
+     1) Erstelle ein Formular in Google Forms.
+     2) Klicke auf "Senden" → "<>" (Einbetten) → kopiere den iframe-Code und füge ihn hier ein.
+-->
+<div class="card" id="quiz-container"></div>
+
+<button id="submit">Test auswerten</button>
+<div id="output"></div>
+
+<script>
+const questions = [
+  {type:"mcq", question:"Was war das Hauptthema des Videos?", options:["Option A","Option B","Option C"], answer:"Option A", points:1},
+  {type:"text", question:"Nenne ein Stichwort aus dem Video.", answer:"Beispiel", points:1},
+  {type:"checkbox", question:"Wähle die richtigen Aussagen.", options:["Richtig 1","Richtig 2","Falsch 3"], answer:["Richtig 1","Richtig 2"], points:1}
+];
+
+function renderQuiz(){
+  const container = document.getElementById('quiz-container');
+  container.innerHTML = '';
+  questions.forEach((q,i)=>{
+    const el = document.createElement('div');
+    el.className = 'card';
+    let html = `<strong>Frage ${i+1}:</strong> ${q.question}<div class="options">`;
+    if(q.type==='mcq'){
+      q.options.forEach((o,j)=> html += `<label><input type="radio" name="q${i}" value="${o}"> ${o}</label>`);
+    } else if(q.type==='checkbox'){
+      q.options.forEach((o,j)=> html += `<label><input type="checkbox" name="q${i}" value="${o}"> ${o}</label>`);
+    } else {
+      html += `<input type="text" name="q${i}" style="width:100%;padding:8px;margin-top:8px">`;
+    }
+    html += `</div>`;
+    el.innerHTML = html;
+    container.appendChild(el);
+  });
+}
+function normalize(s){return String(s||'').trim().toLowerCase().replace(/\s+/g,'');}
+document.getElementById('submit').addEventListener('click', ()=>{
+  let score=0, total=0, details=[];
+  questions.forEach((q,i)=>{
+    total += q.points||1;
+    if(q.type==='mcq'){
+      const sel = document.querySelector(`input[name="q${i}"]:checked`);
+      const ans = sel?sel.value:'';
+      if(normalize(ans)===normalize(q.answer)) score+=q.points||1;
+      details.push({q:q.question, given: ans});
+    } else if(q.type==='checkbox'){
+      const sel = Array.from(document.querySelectorAll(`input[name="q${i}"]:checked`)).map(n=>n.value);
+      const ca = new Set(q.answer||[]);
+      const correct = sel.filter(s=>ca.has(s)).length;
+      const wrong = sel.length - correct;
+      const raw = Math.max(0, correct - wrong);
+      const frac = raw / Math.max(1, (q.answer||[]).length);
+      const pts = (q.points||1)*frac;
+      score += pts;
+      details.push({q:q.question, given: sel, points: Math.round(pts*100)/100});
+    } else {
+      const val = (document.querySelector(`input[name="q${i}"]`)||{}).value || '';
+      if(normalize(val)===normalize(q.answer)) score+=q.points||1;
+      details.push({q:q.question, given: val});
+    }
+  });
+  const percent = Math.round(score/total*1000)/10;
+  document.getElementById('output').innerHTML = `<div class="result"><strong>Ergebnis:</strong> ${score.toFixed(2)} / ${total} Punkte — ${percent}% 
+  <div style="margin-top:8px"><button id="download">Ergebnis als CSV herunterladen</button></div></div>`;
+  document.getElementById('download').addEventListener('click', ()=>{
+    const rows = [["timestamp","score","total","percent","details"]];
+    rows.push([new Date().toISOString(), score.toFixed(2), total, percent, JSON.stringify(details)]);
+    const csv = rows.map(r=> r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='quiz_result.csv'; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1500);
+  });
+});
+renderQuiz();
+</script>
